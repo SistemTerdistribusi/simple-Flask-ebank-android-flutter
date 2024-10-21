@@ -90,7 +90,7 @@ class _TransferScreenState extends State<TransferScreen> {
   final TextEditingController amountController = TextEditingController();
 
   Future<void> transferFunds() async {
-    final url = Uri.parse('http://ebank.honjo.web.id/api/transfer');
+    final url = Uri.parse('https://ebank.honjo.web.id/api/transfer');
     final response = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
@@ -139,7 +139,7 @@ class AccountInfoScreen extends StatelessWidget {
   const AccountInfoScreen({super.key});
 
   Future<Map<String, dynamic>> fetchAccountInfo() async {
-    final url = Uri.parse('http://ebank.honjo.web.id/api/saldo');
+    final url = Uri.parse('https://ebank.honjo.web.id/api/saldo');
     final response = await http.get(url);
 
     if (response.statusCode == 200) {
@@ -169,7 +169,8 @@ class AccountInfoScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(16.0),
                 child: Text(
                   'Welcome, $customerName',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.bold),
                 ),
               ),
               Expanded(
@@ -180,7 +181,8 @@ class AccountInfoScreen extends StatelessWidget {
                     return ListTile(
                       title: Text(account['account_name'] ??
                           'Unnamed Account'), // Handle null value
-                      subtitle: Text('Balance: ${account['available_balance']}'),
+                      subtitle:
+                          Text('Balance: ${account['available_balance']}'),
                     );
                   },
                 ),
@@ -204,15 +206,37 @@ class InputBalanceScreen extends StatelessWidget {
   }
 }
 
-class TransactionScreen extends StatelessWidget {
+class TransactionScreen extends StatefulWidget {
   const TransactionScreen({super.key});
 
-  Future<Map<String, dynamic>> fetchTransactions() async {
-    final url = Uri.parse('http://ebank.honjo.web.id/api/saldo');
+  @override
+  _TransactionScreenState createState() => _TransactionScreenState();
+}
+
+class _TransactionScreenState extends State<TransactionScreen> {
+  late Future<List<Map<String, dynamic>>> transactionsFuture;
+  List<Map<String, dynamic>> transactions = [];
+  List<Map<String, dynamic>> filteredTransactions = [];
+  String searchQuery = '';
+  bool ascending = true;
+
+  @override
+  void initState() {
+    super.initState();
+    transactionsFuture = fetchTransactions();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchTransactions() async {
+    final url = Uri.parse('https://ebank.honjo.web.id/api/saldo');
     final response = await http.get(url);
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+      final data = jsonDecode(response.body);
+      setState(() {
+        transactions = List<Map<String, dynamic>>.from(data['transactions']);
+        filteredTransactions = transactions;
+      });
+      return transactions;
     } else {
       print(
           'Failed to load transactions: ${response.statusCode} - ${response.body}');
@@ -220,30 +244,84 @@ class TransactionScreen extends StatelessWidget {
     }
   }
 
+  void filterTransactions(String query) {
+    setState(() {
+      searchQuery = query;
+      filteredTransactions = transactions.where((transaction) {
+        final description = transaction['description'].toString().toLowerCase();
+        return description.contains(query.toLowerCase());
+      }).toList();
+    });
+  }
+
+  void sortTransactions() {
+    setState(() {
+      ascending = !ascending;
+      filteredTransactions.sort((a, b) {
+        final aDate = DateTime.parse(a['transaction_date']);
+        final bDate = DateTime.parse(b['transaction_date']);
+        return ascending ? aDate.compareTo(bDate) : bDate.compareTo(aDate);
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: fetchTransactions(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        } else if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        } else {
-          final transactions = snapshot.data!['transactions'];
-          return ListView.builder(
-            itemCount: transactions.length,
-            itemBuilder: (context, index) {
-              final transaction = transactions[index];
-              return ListTile(
-                title: Text(transaction['description']),
-                subtitle: Text(
-                    'Amount: ${transaction['transaction_amount']} - Date: ${transaction['transaction_date']}'),
-              );
-            },
-          );
-        }
-      },
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Transactions'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.sort),
+            onPressed: sortTransactions,
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              onChanged: filterTransactions,
+              decoration: const InputDecoration(
+                labelText: 'Search',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          Expanded(
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: transactionsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                } else if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                } else {
+                  final limitedTransactions =
+                      filteredTransactions.take(10).toList();
+                  return ListView.builder(
+                    itemCount: limitedTransactions.length,
+                    itemBuilder: (context, index) {
+                      final transaction = limitedTransactions[index];
+                      return Card(
+                        margin: const EdgeInsets.all(8.0),
+                        child: ListTile(
+                          leading: const Icon(Icons.attach_money),
+                          title: Text(transaction['description']),
+                          subtitle: Text(
+                              'Amount: ${transaction['transaction_amount']} - Date: ${transaction['transaction_date']}'),
+                        ),
+                      );
+                    },
+                  );
+                }
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
