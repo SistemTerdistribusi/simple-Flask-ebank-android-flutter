@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 void main() {
-  runApp(BankingApp());
+  runApp(const BankingApp());
 }
 
 class BankingApp extends StatelessWidget {
@@ -13,10 +13,10 @@ class BankingApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Banking App',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: HomePage(),
+      themeMode: ThemeMode.system,
+      theme: ThemeData.light(),
+      darkTheme: ThemeData.dark(),
+      home: const HomePage(),
     );
   }
 }
@@ -32,10 +32,10 @@ class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
 
   static final List<Widget> _widgetOptions = <Widget>[
-    TransferScreen(),
-    AccountInfoScreen(),
-    InputBalanceScreen(),
-    TransactionScreen(),
+    const TransferScreen(),
+    const AccountInfoScreen(),
+    const InputBalanceScreen(),
+    const TransactionScreen(),
   ];
 
   void _onItemTapped(int index) {
@@ -72,7 +72,264 @@ class _HomePageState extends State<HomePage> {
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,
+        unselectedItemColor: Colors.grey, // Change unselected item color
         onTap: _onItemTapped,
+      ),
+    );
+  }
+}
+
+class InputBalanceScreen extends StatefulWidget {
+  const InputBalanceScreen({super.key});
+
+  @override
+  _InputBalanceScreenState createState() => _InputBalanceScreenState();
+}
+
+class _InputBalanceScreenState extends State<InputBalanceScreen> {
+  List<dynamic> accounts = [];
+  List<String> accountTypes = ['Savings', 'Checking'];
+  List<String> currencies = ['IDR', 'USD'];
+  String? selectedAccount;
+  String? selectedAccountType;
+  String? selectedCurrency;
+  final TextEditingController amountController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    fetchAccounts();
+  }
+
+  Future<void> fetchAccounts() async {
+    final url = Uri.parse('https://ebank.honjo.web.id/api/saldo');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      setState(() {
+        accounts = data['accounts'];
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load accounts')));
+    }
+  }
+
+  Future<void> submitBalance() async {
+    // Validate inputs
+    if (selectedAccount == null ||
+        selectedAccountType == null ||
+        selectedCurrency == null ||
+        amountController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please fill in all fields')));
+      return;
+    }
+
+    final url = Uri.parse('http://103.47.225.247:5001/api/input_saldo');
+
+    final requestBody = jsonEncode({
+      'account_number': selectedAccount,
+      'account_type': selectedAccountType,
+      'currency_code': selectedCurrency,
+      'available_balance': amountController.text,
+    });
+
+    print('--- Request Details ---');
+    print('Request URL: $url');
+    print('Request Headers: {Content-Type: application/json}');
+    print('Request Body: $requestBody');
+    print('----------------------');
+
+    try {
+      // Send the POST request
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: requestBody,
+      );
+
+      // Log the response status code and body
+      print('--- Response Details ---');
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+      print('------------------------');
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Balance added successfully. New balance: ${responseData['data']['new_balance']}')));
+      } else {
+        String errorMessage;
+        try {
+          final errorData = jsonDecode(response.body);
+          errorMessage = errorData['message'] ?? 'Failed to add balance';
+        } catch (e) {
+          errorMessage =
+              'Failed to add balance. Status code: ${response.statusCode}';
+        }
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(errorMessage)));
+      }
+    } catch (e) {
+      print('Error occurred: $e');
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('An error occurred while adding balance')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          DropdownButtonFormField<String>(
+            value: selectedAccount,
+            items: accounts.map((account) {
+              return DropdownMenuItem<String>(
+                value: account['account_number'],
+                child: Text(
+                  account['account_name'] ?? 'Unnamed Account',
+                  style: TextStyle(
+                      color: isDarkMode ? Colors.white : Colors.black),
+                ),
+              );
+            }).toList(),
+            onChanged: (value) {
+              setState(() {
+                selectedAccount = value;
+              });
+            },
+            decoration: InputDecoration(
+              labelText: 'Select Account',
+              labelStyle: TextStyle(
+                  color: isDarkMode
+                      ? Colors.white
+                      : Colors.black), // Dynamic label color
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(
+                    color: isDarkMode
+                        ? Colors.grey
+                        : Colors.black), // Dynamic border color
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide:
+                    BorderSide(color: Colors.blue), // Focused border color
+              ),
+            ),
+            dropdownColor: isDarkMode
+                ? Colors.black87
+                : Colors.white, // Dynamic dropdown background
+            style: TextStyle(
+                color: isDarkMode
+                    ? Colors.white
+                    : Colors.black), // Dynamic text color
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: selectedAccountType,
+            items: accountTypes.map((type) {
+              return DropdownMenuItem<String>(
+                value: type,
+                child: Text(
+                  type,
+                  style: TextStyle(
+                      color: isDarkMode ? Colors.white : Colors.black),
+                ),
+              );
+            }).toList(),
+            onChanged: (value) {
+              setState(() {
+                selectedAccountType = value;
+              });
+            },
+            decoration: InputDecoration(
+              labelText: 'Select Account Type',
+              labelStyle: TextStyle(
+                  color: isDarkMode
+                      ? Colors.white
+                      : Colors.black), // Dynamic label color
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(
+                    color: isDarkMode
+                        ? Colors.grey
+                        : Colors.black), // Dynamic border color
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide:
+                    BorderSide(color: Colors.blue), // Focused border color
+              ),
+            ),
+            dropdownColor: isDarkMode
+                ? Colors.black87
+                : Colors.white, // Dynamic dropdown background
+            style: TextStyle(
+                color: isDarkMode
+                    ? Colors.white
+                    : Colors.black), // Dynamic text color
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: selectedCurrency,
+            items: currencies.map((currency) {
+              return DropdownMenuItem<String>(
+                value: currency,
+                child: Text(
+                  currency,
+                  style: TextStyle(
+                      color: isDarkMode ? Colors.white : Colors.black),
+                ),
+              );
+            }).toList(),
+            onChanged: (value) {
+              setState(() {
+                selectedCurrency = value;
+              });
+            },
+            decoration: InputDecoration(
+              labelText: 'Select Currency',
+              labelStyle: TextStyle(
+                  color: isDarkMode
+                      ? Colors.white
+                      : Colors.black), // Dynamic label color
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(
+                    color: isDarkMode
+                        ? Colors.grey
+                        : Colors.black), // Dynamic border color
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide:
+                    BorderSide(color: Colors.blue), // Focused border color
+              ),
+            ),
+            dropdownColor: isDarkMode
+                ? Colors.black87
+                : Colors.white, // Dynamic dropdown background
+            style: TextStyle(
+                color: isDarkMode
+                    ? Colors.white
+                    : Colors.black), // Dynamic text color
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: amountController,
+            decoration: const InputDecoration(labelText: 'Enter Amount'),
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: submitBalance,
+            child: const Text('Add Balance'),
+          ),
+        ],
       ),
     );
   }
@@ -191,17 +448,6 @@ class AccountInfoScreen extends StatelessWidget {
           );
         }
       },
-    );
-  }
-}
-
-class InputBalanceScreen extends StatelessWidget {
-  const InputBalanceScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Input Balance Screen'),
     );
   }
 }
@@ -325,3 +571,5 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 }
+
+// AccountInfoScreen and TransactionScreen can remain the same as in your original code
