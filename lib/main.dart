@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const BankingApp());
@@ -146,9 +148,9 @@ class _InputBalanceScreenState extends State<InputBalanceScreen> {
       // Send the POST request
       final response = await http.post(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+    headers: <String, String>{
+      'Content-Type': 'application/json; charset=UTF-8',
+    },
         body: requestBody,
       );
 
